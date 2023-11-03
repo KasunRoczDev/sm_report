@@ -2,13 +2,12 @@
 
 namespace App\Utils;
 
-use App\Contact;
-use App\Product;
-use App\ReportQueueData;
-use App\Transaction;
-use App\TransactionSellLinesPurchaseLines;
-use App\Unit;
-use App\Variation;
+use App\Models\Contact;
+use App\Models\Product;
+use App\Models\ReportQueueData;
+use App\Models\Transaction;
+use App\Models\TransactionSellLinesPurchaseLines;
+use App\Models\Variation;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 

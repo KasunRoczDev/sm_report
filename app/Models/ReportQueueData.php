@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ReportQueueData extends Model
 {
-    protected $connection = 'reports';
+    protected $connection = 'tenants';
 
     protected $table = 'report_queue_data';
 

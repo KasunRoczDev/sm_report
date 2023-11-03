@@ -22,4 +22,6 @@ controller(\App\Http\Controllers\ReportController::class)->group(function () {
     Route::get('lot-report', 'getLotReport');
     Route::get('products', 'product_datatable');
     Route::get('pos-stock-report', 'getStockPosReport');
+    Route::get('lot-summary-report','lotSummaryReport');
+    Route::get('return-sales-datatable', 'return_sales_popup_datatable');
 });
