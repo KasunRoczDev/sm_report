@@ -13,6 +13,10 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+Route::get('health',function (){
+    return response()->json(['success'=>true],200);
+});
+
 //Separate Report Server API
 Route::middleware([
     'api', 'auth:api',
