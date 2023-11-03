@@ -375,52 +375,35 @@ class ReportController extends Controller
                                     </button>
                                     <ul class="dropdown-menu dropdown-menu-left" role="menu">';
 
-                        if (auth()->user()->can('sell.view') || auth()->user()->can('direct_sell.access') || auth()->user()->can('view_own_sell_only')) {
-                            $html .= '<li><a href="#" data-href="' . remote_action('SellController@show',
-                                    [$row->id]) . '" class="btn-modal" data-container=".view_modal"><i class="fas fa-eye" aria-hidden="true"></i> ' . __('messages.view') . '</a></li>';
-                        }
+                        $html .= '<li><a href="#" data-href="' . remote_url('sells/'.$row->id) . '" class="btn-modal" data-container=".view_modal"><i class="fas fa-eye" aria-hidden="true"></i> ' . __('messages.view') . '</a></li>';
+
                         if (!$only_shipments) {
                             //edit Button hide
                             if ($row->is_direct_sale == 0) {
                                 if (auth()->user()->can('sell.update')) {
-                                    $html .= '<li ><a target="_blank" href="' . remote_action('SellPosController@edit',
-                                            [$row->id]) . '"><i class="fas fa-edit"></i> ' . __('messages.edit') . '</a></li>';
+                                    $html .= '<li ><a target="_blank" href="' . remote_url('pos/'.$row->id.'/edit') . '"><i class="fas fa-edit"></i> ' . __('messages.edit') . '</a></li>';
                                 }
                                 if (auth()->user()->can('access_sell_return')) {
-                                    $html .= '<li><a href="#" class="cancel-invoice" data-href="' . remote_route('sell.return-all',
-                                            [$row->id]) . '"><i class="fas fa-window-close" aria-hidden="true"></i> ' . __('lang_v1.cancel') . '</a></li>';
+                                    $html .= '<li><a href="#" class="cancel-invoice" data-href="' . remote_url('sell-return-all/add/'.$row->id) . '"><i class="fas fa-window-close" aria-hidden="true"></i> ' . __('lang_v1.cancel') . '</a></li>';
                                 }
                             } else {
                                 if (auth()->user()->can('direct_sell.access')) {
-                                    $html .= '<li ><a target="_blank" href="' . remote_action('SellController@edit',
-                                            [$row->id]) . '"><i class="fas fa-edit"></i> ' . __('messages.edit') . '</a></li>';
+                                    $html .= '<li ><a target="_blank" href="' . remote_url('sells/'.$row->id) . '"><i class="fas fa-edit"></i> ' . __('messages.edit') . '</a></li>';
                                 }
                                 if (auth()->user()->can('access_sell_return')) {
-                                    $html .= '<li><a href="#" class="cancel-invoice" data-href="' . remote_route('sell.return-all',
-                                            [$row->id]) . '"><i class="fas fa-window-close" aria-hidden="true"></i> ' . __('lang_v1.cancel') . '</a></li>';
+                                    $html .= '<li><a href="#" class="cancel-invoice" data-href="' . remote_url('sell-return-all/add/'.$row->id) . '"><i class="fas fa-window-close" aria-hidden="true"></i> ' . __('lang_v1.cancel') . '</a></li>';
                                 }
-                            }
-                            //Delete Button hide
-                            if (auth()->user()->can('direct_sell.delete') || auth()->user()->can('sell.delete')) {
-                                $html .= '<li class="hide"><a href="' . remote_action('SellPosController@destroy',
-                                        [$row->id]) . '" class="delete-sale"><i class="fas fa-trash"></i> ' . __('messages.delete') . '</a></li>';
                             }
                         }
                         if (auth()->user()->can('sell.view') || auth()->user()->can('direct_sell.access')) {
-                            $html .= '<li><a href="#" class="print-invoice" data-href="' . remote_route('sell.printInvoice',
-                                    [$row->id]) . '?is_suspend=' . $row->is_suspend . '"><i class="fas fa-print" aria-hidden="true"></i> ' . __('messages.print') . '</a></li>
-                                <li><a href="#" class="print-invoice" data-href="' . remote_route('sell.printInvoice',
-                                    [$row->id]) . '?package_slip=true"><i class="fas fa-file-alt" aria-hidden="true"></i> ' . __('lang_v1.packing_slip') . '</a></li>
-                                <li><a href="#" class="print-invoice" data-href="' . remote_route('sell.printInvoice',
-                                    [$row->id]) . '?waybill_summary=true"><i class="fas fa-file-alt" aria-hidden="true"></i> ' . __('lang_v1.waybill_summary') . '</a></li>
-                                <li><a href="#" class="print-invoice" data-href="' . remote_route('sell.printInvoice',
-                                    [$row->id]) . '?waybill_detailed=true"><i class="fas fa-file-alt" aria-hidden="true"></i> ' . __('lang_v1.waybill_detailed') . '</a></li>
-                                <li><a href="#" class="print-invoice" data-href="' . remote_route('sell.printInvoice',
-                                    [$row->id]) . '?delivery_condition=true"><i class="fa fa-check-square" aria-hidden="true"></i> ' . __('lang_v1.delivery_condition') . '</a></li>';
+                            $html .= '<li><a href="#" class="print-invoice" data-href="' . remote_url('sells/'.$row->id.'/print') . '?is_suspend=' . $row->is_suspend . '"><i class="fas fa-print" aria-hidden="true"></i> ' . __('messages.print') . '</a></li>
+                                <li><a href="#" class="print-invoice" data-href="' . remote_url('sells/'.$row->id.'/print') . '?package_slip=true"><i class="fas fa-file-alt" aria-hidden="true"></i> ' . __('lang_v1.packing_slip') . '</a></li>
+                                <li><a href="#" class="print-invoice" data-href="' . remote_url('sells/'.$row->id.'/print') . '?waybill_summary=true"><i class="fas fa-file-alt" aria-hidden="true"></i> ' . __('lang_v1.waybill_summary') . '</a></li>
+                                <li><a href="#" class="print-invoice" data-href="' . remote_url('sells/'.$row->id.'/print') . '?waybill_detailed=true"><i class="fas fa-file-alt" aria-hidden="true"></i> ' . __('lang_v1.waybill_detailed') . '</a></li>
+                                <li><a href="#" class="print-invoice" data-href="' . remote_url('sells/'.$row->id.'/print') . '?delivery_condition=true"><i class="fa fa-check-square" aria-hidden="true"></i> ' . __('lang_v1.delivery_condition') . '</a></li>';
                         }
                         if (auth()->user()->can('access_shipping')) {
-                            $html .= '<li><a href="#" data-href="' . remote_action('SellController@editShipping',
-                                    [$row->id]) . '" class="btn-modal" data-container=".view_modal"><i class="fas fa-truck" aria-hidden="true"></i>' . __('lang_v1.edit_shipping') . '</a></li>';
+                            $html .= '<li><a href="#" data-href="' . remote_url('sells/edit-shipping/'.$row->id) . '" class="btn-modal" data-container=".view_modal"><i class="fas fa-truck" aria-hidden="true"></i>' . __('lang_v1.edit_shipping') . '</a></li>';
                         }
                         if (!$only_shipments) {
                             $is_admin = $this->moduleUtil->is_admin(auth()->user(), auth()->user()->business_id);
@@ -428,39 +411,29 @@ class ReportController extends Controller
 
                             if ($row->payment_status != 'paid' || $row->payment_status != 'setoff' && (auth()->user()->can('sell.create') || auth()->user()->can('direct_sell.access')) && auth()->user()->can('sell.payments')) {
                                 if (!(!auth()->user()->can('sell.minimu_price_override') && $row->is_suspend) || $row->approved || $is_admin) {
-                                    $html .= '<li><a href="' . remote_action('TransactionPaymentController@addPayment',
-                                            [$row->id]) . '" class="add_payment_modal"><i class="fas fa-money-bill-alt"></i> ' . __('purchase.add_payment') . '</a></li>';
+                                    $html .= '<li><a href="' . remote_url('payments/add_payment/'.$row->id) . '" class="add_payment_modal"><i class="fas fa-money-bill-alt"></i> ' . __('purchase.add_payment') . '</a></li>';
                                 }
                             }
                             if (!(!auth()->user()->can('sell.minimu_price_override') && $row->is_suspend) || $row->approved || $is_admin) {
-                                $html .= '<li><a href="' . remote_action('TransactionPaymentController@show',
-                                        [$row->id]) . '" class="view_payment_modal"><i class="fas fa-money-bill-alt"></i> ' . __('purchase.view_payments') . '</a></li>';
+                                $html .= '<li><a href="' . remote_url('payments/'.$row->id) . '" class="view_payment_modal"><i class="fas fa-money-bill-alt"></i> ' . __('purchase.view_payments') . '</a></li>';
                             }
 
                             if (auth()->user()->can('sell.create')) {
-                                $html .= '<li><a href="' . remote_action('SellController@duplicateSell',
-                                        [$row->id]) . '"><i class="fas fa-copy"></i> ' . __('lang_v1.duplicate_sell') . '</a></li>';
+                                $html .= '<li><a href="' . remote_url('sells/duplicate/'.$row->id) . '"><i class="fas fa-copy"></i> ' . __('lang_v1.duplicate_sell') . '</a></li>';
                             }
                             if (auth()->user()->can('access_sell_return')) {
-                                $html .= '<li><a href="' . remote_action('SellReturnController@add',
-                                        [$row->id]) . '"><i class="fas fa-undo"></i> ' . __('lang_v1.sell_return') . '</a></li>';
+                                $html .= '<li><a href="' . remote_url('sell-return/add/'.$row->id) . '"><i class="fas fa-undo"></i> ' . __('lang_v1.sell_return') . '</a></li>';
                             }
                             if (auth()->user()->can('sell.create') && $row->payment_status != 'due') {
                                 $html .= '
-                                <li><a href="' . remote_action('SellReturnController@add', [
-                                        $row->id, 'status' => 'exchange',
-                                    ]) . '"><i class="fas fa-exchange-alt"></i> ' . __('lang_v1.exchange') . '</a></li>';
+                                <li><a href="' . remote_url('sell-return/add/'.$row->id.'?status=exchange') . '"><i class="fas fa-exchange-alt"></i> ' . __('lang_v1.exchange') . '</a></li>';
                             }
                             if (auth()->user()->can('sell.create')) {
                                 $html .= '
-                                <li><a href="' . remote_action('SellPosController@showInvoiceUrl',
-                                        [$row->id]) . '" class="view_invoice_url"><i class="fas fa-eye"></i> ' . __('lang_v1.view_invoice_url') . '</a></li>';
+                                <li><a href="' . remote_url('sells/invoice-url/'.$row->id) . '" class="view_invoice_url"><i class="fas fa-eye"></i> ' . __('lang_v1.view_invoice_url') . '</a></li>';
                             }
 
-                            $html .= '<li><a href="#" data-href="' . remote_action('NotificationController@getTemplate',
-                                    [
-                                        'transaction_id' => $row->id, 'template_for' => 'new_sale',
-                                    ]) . '" class="btn-modal" data-container=".view_modal"><i class="fa fa-envelope" aria-hidden="true"></i>' . __('lang_v1.new_sale_notification') . '</a></li>';
+                            $html .= '<li><a href="#" data-href="' . remote_url('notification/get-template/'.$row->id.'/new_sale') . '" class="btn-modal" data-container=".view_modal"><i class="fa fa-envelope" aria-hidden="true"></i>' . __('lang_v1.new_sale_notification') . '</a></li>';
                         }
 
                         $html .= '</ul></div>';
@@ -515,7 +488,7 @@ class ReportController extends Controller
                     $is_admin = auth()->user()->can('Admin');
                     $payment_status = Transaction::getPaymentStatus($row);
 
-                    return (string)view('sell.partials.payment_status', [
+                    return (string)view('supports.payment_status', [
                         'payment_status' => $payment_status, 'id' => $row->id, 'is_suspend' => $row->is_suspend,
                         'overide_permission' => auth()->user()->can('sell.minimu_price_override'),
                         'approved' => $row->approved, 'is_admin' => $is_admin,
@@ -536,8 +509,7 @@ class ReportController extends Controller
                 $return_due_html = '';
                 if (!empty($row->return_exists)) {
                     $return_due = $row->amount_return - $row->return_paid;
-                    $return_due_html .= '<a href="' . remote_action('TransactionPaymentController@show',
-                            [$row->return_transaction_id]) . '" class="view_purchase_return_payment_modal"><span class="display_currency sell_return_due" data-currency_symbol="true" data-orig-value="' . $return_due . '">' . $return_due . '</span></a>';
+                    $return_due_html .= '<a href="' . remote_url('payments/'.$row->return_transaction_id) . '" class="view_purchase_return_payment_modal"><span class="display_currency sell_return_due" data-currency_symbol="true" data-orig-value="' . $return_due . '">' . $return_due . '</span></a>';
                 }
 
                 return $return_due_html;
@@ -570,9 +542,7 @@ class ReportController extends Controller
                 if (!empty($row->zip_code)) {
                     $zip_code = $row->zip_code . '';
                 }
-                $address = '<div>' . $address_line_1 . '' . $address_line_2 . '' . $city . '' . $state . '' . $country . '' . $zip_code . '</div>';
-
-                return $address;
+                return '<div>' . $address_line_1 . '' . $address_line_2 . '' . $city . '' . $state . '' . $country . '' . $zip_code . '</div>';
             })
             ->editColumn('invoice_no', function ($row) {
                 $invoice_no = $row->invoice_no;
@@ -614,8 +584,7 @@ class ReportController extends Controller
             })
             ->editColumn('shipping_status', function ($row) use ($shipping_statuses) {
                 $status_color = !empty($this->shipping_status_colors[$row->shipping_status]) ? $this->shipping_status_colors[$row->shipping_status] : 'bg-gray';
-                $status = !empty($row->shipping_status) ? '<a href="#" class="btn-modal" data-href="' . remote_action('SellController@editShipping',
-                        [$row->id]) . '" data-container=".view_modal"><span class="label ' . $status_color . '">' . $shipping_statuses[$row->shipping_status] . '</span></a>' : '';
+                $status = !empty($row->shipping_status) ? '<a href="#" class="btn-modal" data-href="' . remote_url('sells/edit-shipping/'.$row->id) . '" data-container=".view_modal"><span class="label ' . $status_color . '">' . $shipping_statuses[$row->shipping_status] . '</span></a>' : '';
 
                 return $status;
             })
@@ -657,11 +626,7 @@ class ReportController extends Controller
             })
             ->setRowAttr([
                 'data-href' => function ($row) {
-                    if (auth()->user()->can('sell.view') || auth()->user()->can('view_own_sell_only')) {
-                        return remote_action('SellController@show', [$row->id]);
-                    } else {
-                        return '';
-                    }
+                    return remote_url('sells/'.$row->id);
                 },
             ]);
 

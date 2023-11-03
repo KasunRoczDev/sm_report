@@ -75,3 +75,10 @@ function return_remote_fn_url($asset_url): array|string
         return str_replace($server_url, request()->header('origin'), $asset_url);
     }
 }
+
+if (!function_exists('remote_url')) {
+    function remote_url($url_para): string
+    {
+        return request()->header('origin').'/'.$url_para;
+    }
+}
