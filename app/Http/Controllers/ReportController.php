@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Contact;
 use App\Models\MultiSaleTypes;
 use App\Models\Product;
 use App\Models\SellingPriceGroup;
@@ -9,6 +10,7 @@ use App\Models\Transaction;
 use App\Utils\BusinessUtil;
 use App\Utils\ModuleUtil;
 use App\Utils\ProductUtil;
+use App\Utils\ReportFunctionUtil;
 use App\Utils\ReportQueryUtil;
 use App\Utils\TransactionUtil;
 use Carbon\Carbon;
@@ -24,6 +26,7 @@ class ReportController extends Controller
     private ModuleUtil $moduleUtil;
     private ProductUtil $productUtil;
     private ReportQueryUtil $reportQueryUtil;
+    private ReportFunctionUtil $reportFunctionUtil;
 
     public function __construct()
     {
@@ -32,6 +35,7 @@ class ReportController extends Controller
         $this->moduleUtil = new ModuleUtil();
         $this->productUtil = new ProductUtil();
         $this->reportQueryUtil = new ReportQueryUtil();
+        $this->reportFunctionUtil = new ReportFunctionUtil();
     }
 
     public function sells_datatables():JsonResponse
@@ -536,10 +540,10 @@ class ReportController extends Controller
                 return $row->supplier_business_name;
             })
             ->addColumn('address', function ($row) {
-                return $this->getFullAddress($row);
+                return $this->reportFunctionUtil->getFullAddress($row);
             })
             ->editColumn('invoice_no', function ($row) {
-                return $this->invoice_no($row);
+                return $this->reportFunctionUtil->invoice_no($row);
             })
             ->editColumn('shipping_status', function ($row) use ($shipping_statuses) {
                 $status_color = !empty($this->shipping_status_colors[$row->shipping_status]) ? $this->shipping_status_colors[$row->shipping_status] : 'bg-gray';
@@ -1206,7 +1210,7 @@ class ReportController extends Controller
                 return $row->customer_mobile_number;
             })
             ->editColumn('invoice_no', function ($row) {
-                return $this->invoice_no($row);
+                return $this->reportFunctionUtil->invoice_no($row);
             })
             ->editColumn(
                 'total_paid',
@@ -1261,80 +1265,136 @@ class ReportController extends Controller
 
     }
 
-    /**
-     * @param $row
-     * @return string
-     */
-    function getFullAddress($row): string
+    public function getPurchaseSell(Request $request): array
     {
-        $address_line_1 = '';
-        $address_line_2 = '';
-        $city = '';
-        $state = '';
-        $country = '';
-        $zip_code = '';
-        if (!empty($row->address_line_1)) {
-            $address_line_1 = $row->address_line_1 . ',';
-        }
-        if (!empty($row->address_line_2)) {
-            $address_line_2 = $row->address_line_2 . ',';
-        }
-        if (!empty($row->city)) {
-            $city = $row->city . ',';
-        }
-        if (!empty($row->state)) {
-            $state = $row->state . ',';
-        }
-        if (!empty($row->country)) {
-            $country = $row->country . ',';
-        }
-        if (!empty($row->zip_code)) {
-            $zip_code = $row->zip_code . '';
-        }
-        return '<div>' . $address_line_1 . '' . $address_line_2 . '' . $city . '' . $state . '' . $country . '' . $zip_code . '</div>';
+        $business_id = auth()->user()->business_id;
+        $start_date = $request->get('start_date');
+        $end_date = $request->get('end_date');
+        $location_id = $request->get('location_id');
+
+        $purchase_details = $this->transactionUtil->getPurchaseTotals($business_id, $start_date, $end_date, $location_id);
+
+        $sell_details = $this->transactionUtil->getSellTotals(
+            $business_id,
+            $start_date,
+            $end_date,
+            $location_id
+        );
+
+        $transaction_types = [
+            'purchase_return', 'sell_return'
+        ];
+
+        $transaction_totals = $this->transactionUtil->getTransactionTotals(
+            $business_id,
+            $transaction_types,
+            $start_date,
+            $end_date,
+            $location_id
+        );
+
+        $total_purchase_return_inc_tax = $transaction_totals['total_purchase_return_inc_tax'];
+        $total_sell_return_inc_tax = $transaction_totals['total_sell_return_inc_tax'];
+
+        $difference = [
+            'total' => $sell_details['total_sell_inc_tax'] + $total_sell_return_inc_tax - $purchase_details['total_purchase_inc_tax'] - $total_purchase_return_inc_tax,
+            'due' => $sell_details['invoice_due'] - $purchase_details['purchase_due']
+        ];
+
+        return [
+            'purchase' => $purchase_details,
+            'sell' => $sell_details,
+            'total_purchase_return' => $total_purchase_return_inc_tax,
+            'total_sell_return' => $total_sell_return_inc_tax,
+            'difference' => $difference
+        ];
     }
 
-    /**
-     * @param $row
-     * @return string
-     */
-    function invoice_no($row): string
+    public function getCustomerSuppliers(Request $request): JsonResponse
     {
-        $invoice_no = $row->invoice_no;
-        if ($row->is_cod) {
-            $invoice_no .= ' <i class="fa fa-motorcycle text-primary no-print" title="' . __('lang_v1.synced_from_woocommerce') . '"></i>';
-        }
-        if (!empty($row->woocommerce_order_id)) {
-            $invoice_no .= ' <i class="fab fa-wordpress text-primary no-print" title="' . __('lang_v1.synced_from_woocommerce') . '"></i>';
-        }
-        if (!empty($row->shopify_order_id)) {
-            $invoice_no .= ' <i style=" color: #95BF47 !important;" <span  class="fa fa-shopping-bag text-primary no-print" title="' . __('lang_v1.synced_from_woocommerce') . '"></i>';
-        }
-        if (!empty($row->exchange_exists) && $row->exchange_exists > 0) {
-            $invoice_no .= ' &nbsp;<small class="label bg-orange label-round no-print" title="' . __('messages.exchange') . '"><i class="fas fa-exchange-alt"></i></small>';
-        }
-        if (!empty($row->return_exists) && $row->exchange_exists == 0) {
-            $invoice_no .= ' &nbsp;<small class="label bg-red label-round no-print" title="' . __('lang_v1.some_qty_returned_from_sell') . '"><i class="fas fa-undo"></i></small>';
-        }
-        if (!empty($row->is_recurring)) {
-            $invoice_no .= ' &nbsp;<small class="label bg-red label-round no-print" title="' . __('lang_v1.subscribed_invoice') . '"><i class="fas fa-recycle"></i></small>';
+        $business_id = auth()->user()->business_id;
+        $contacts = Contact::where('contacts.business_id', $business_id)
+            ->join('transactions AS t', 'contacts.id', '=', 't.contact_id')
+            ->active()
+            ->groupBy('contacts.id')
+            ->select(
+                DB::raw("SUM(IF(t.type = 'purchase', final_total, 0)) as total_purchase"),
+                DB::raw("SUM(IF(t.type = 'purchase_return', final_total, 0)) as total_purchase_return"),
+                DB::raw("SUM(IF(t.type = 'sell' AND t.status = 'final', final_total, 0)) as total_invoice"),
+                DB::raw("SUM(IF(t.type = 'purchase', (SELECT SUM(amount) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as purchase_paid"),
+                DB::raw("SUM(IF(t.type = 'sell' AND t.status = 'final', (SELECT SUM(IF(is_return = 1,-1*amount,amount)) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as invoice_received"),
+                DB::raw("SUM(IF(t.type = 'sell_return', (SELECT SUM(amount) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as sell_return_paid"),
+                DB::raw("SUM(IF(t.type = 'purchase_return', (SELECT SUM(amount) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as purchase_return_received"),
+                DB::raw("SUM(IF(t.type = 'sell_return', final_total, 0)) as total_sell_return"),
+                DB::raw("SUM(IF(t.type = 'opening_balance', final_total, 0)) as opening_balance"),
+                DB::raw("SUM(IF(t.type = 'opening_balance', (SELECT SUM(IF(is_return = 1,-1*amount,amount)) FROM transaction_payments WHERE transaction_payments.transaction_id=t.id), 0)) as opening_balance_paid"),
+                'contacts.supplier_business_name',
+                'contacts.name',
+                'contacts.id',
+                'contacts.type as contact_type',
+                'contacts.mobile'
+            );
+        $permitted_locations = auth()->user()->permitted_locations();
+
+        if ($permitted_locations != 'all') {
+            $contacts->whereIn('t.location_id', $permitted_locations);
         }
 
-        if (!empty($row->is_recurring_reminder)) {
-            $invoice_no .= ' &nbsp;<small class="label bg-green label-round no-print" title="' . __('lang_v1.reminded_invoice') . '"><i class="fas fa-bell"></i></small>';
+        if (!empty($request->input('customer_group_id'))) {
+            $contacts->where('contacts.customer_group_id', $request->input('customer_group_id'));
         }
 
-        if (!empty($row->is_suspend)) {
-            $invoice_no .= ' &nbsp;<small class="label bg-orange label-round no-print" title="' . __('lang_v1.suspended_sales') . '"><i class="fas fa-pause-circle"></i></small>';
+        if (!empty($request->input('contact_type'))) {
+            $contacts->whereIn('contacts.type', [$request->input('contact_type'), 'both']);
         }
 
-        if (!empty($row->recur_parent_id)) {
-            $invoice_no .= ' &nbsp;<small class="label bg-info label-round no-print" title="' . __('lang_v1.subscription_invoice') . '"><i class="fas fa-recycle"></i></small>';
-        }
-        if ($row->ogf_is_sync) {
-            $invoice_no .= ' <i style=" color: #00ec1f !important;" <span  class="fa fa-life-ring text-primary no-print" title="' . __('lang_v1.synced_to_ogf') . '"></i>';
-        }
+        return Datatables::of($contacts)
+            ->editColumn('name', function ($row) {
+                $name = $row->name;
+                if (!empty($row->supplier_business_name)) {
+                    $name .= ', ' . $row->supplier_business_name;
+                }
+                return '<a href="' . remote_url('contacts/'.$row->id) . '" target="_blank" class="no-print">' .
+                    $name .
+                    '</a><span class="print_section">' . $name . '</span>';
+            })
+            ->editColumn('mobile', function ($row) {
+                return '<span data-orig-value="' . $row->mobile . '">' . $row->mobile . '</span>';
+            })
+            ->editColumn('total_purchase', function ($row) {
+                return '<span class="display_currency total_purchase" data-orig-value="' . $row->total_purchase . '" data-currency_symbol = true>' . $row->total_purchase . '</span>';
+            })
+            ->editColumn('total_purchase_return', function ($row) {
+                return '<span class="display_currency total_purchase_return" data-orig-value="' . $row->total_purchase_return . '" data-currency_symbol = true>' . $row->total_purchase_return . '</span>';
+            })
+            ->editColumn('total_sell_return', function ($row) {
+                return '<span class="display_currency total_sell_return" data-orig-value="' . $row->total_sell_return . '" data-currency_symbol = true>' . $row->total_sell_return . '</span>';
+            })
+            ->editColumn('total_invoice', function ($row) {
+                return '<span class="display_currency total_invoice" data-orig-value="' . $row->total_invoice . '" data-currency_symbol = true>' . $row->total_invoice . '</span>';
+            })
+            ->addColumn('due', function ($row) {
+                $due = ($row->total_invoice - $row->invoice_received - $row->total_sell_return + $row->sell_return_paid) - ($row->total_purchase - $row->total_purchase_return + $row->purchase_return_received - $row->purchase_paid);
 
-        return $invoice_no;
+                if ($row->contact_type == 'supplier') {
+                    $due -= $row->opening_balance - $row->opening_balance_paid;
+                } else {
+                    $due += $row->opening_balance - $row->opening_balance_paid;
+                }
+
+                return '<span class="display_currency total_due" data-orig-value="' . $due . '" data-currency_symbol=true data-highlight=true>' . $due . '</span>';
+            })
+            ->addColumn(
+                'opening_balance_due',
+                '<span class="display_currency opening_balance_due" data-currency_symbol=true data-orig-value="{{$opening_balance - $opening_balance_paid}}">{{$opening_balance - $opening_balance_paid}}</span>'
+            )
+            ->removeColumn('supplier_business_name')
+            ->removeColumn('invoice_received')
+            ->removeColumn('purchase_paid')
+            ->removeColumn('id')
+            ->rawColumns(['total_purchase', 'total_invoice', 'due', 'mobile', 'name', 'total_purchase_return', 'total_sell_return', 'opening_balance_due'])
+            ->make(true);
+
     }
+
 }
