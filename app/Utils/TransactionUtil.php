@@ -3670,6 +3670,7 @@ class TransactionUtil extends Util
             'co_c.Name as courier_name',
             'transactions.waybill_no as waybill_number',
             'transactions.return_parent_id',
+            'transactions.is_cod',
             DB::raw("CONCAT(COALESCE(comi_agent.surname, ''),' ',COALESCE(comi_agent.first_name, ''),' ',COALESCE(comi_agent.last_name,'')) as com_agent"),
             DB::raw(
                 "(SELECT IF((temp.approve_total/temp.line_count)=1,1,0) FROM

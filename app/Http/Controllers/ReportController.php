@@ -12,7 +12,6 @@ use App\Utils\ProductUtil;
 use App\Utils\ReportQueryUtil;
 use App\Utils\TransactionUtil;
 use Carbon\Carbon;
-use Exception;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -537,69 +536,10 @@ class ReportController extends Controller
                 return $row->supplier_business_name;
             })
             ->addColumn('address', function ($row) {
-                $address_line_1 = '';
-                $address_line_2 = '';
-                $city = '';
-                $state = '';
-                $country = '';
-                $zip_code = '';
-                if (!empty($row->address_line_1)) {
-                    $address_line_1 = $row->address_line_1 . ',';
-                }
-                if (!empty($row->address_line_2)) {
-                    $address_line_2 = $row->address_line_2 . ',';
-                }
-                if (!empty($row->city)) {
-                    $city = $row->city . ',';
-                }
-                if (!empty($row->state)) {
-                    $state = $row->state . ',';
-                }
-                if (!empty($row->country)) {
-                    $country = $row->country . ',';
-                }
-                if (!empty($row->zip_code)) {
-                    $zip_code = $row->zip_code . '';
-                }
-                return '<div>' . $address_line_1 . '' . $address_line_2 . '' . $city . '' . $state . '' . $country . '' . $zip_code . '</div>';
+                return $this->getFullAddress($row);
             })
             ->editColumn('invoice_no', function ($row) {
-                $invoice_no = $row->invoice_no;
-                if (Transaction::find($row->id)->is_cod) {
-                    $invoice_no .= ' <i class="fa fa-motorcycle text-primary no-print" title="' . __('lang_v1.synced_from_woocommerce') . '"></i>';
-                }
-                if (!empty($row->woocommerce_order_id)) {
-                    $invoice_no .= ' <i class="fab fa-wordpress text-primary no-print" title="' . __('lang_v1.synced_from_woocommerce') . '"></i>';
-                }
-                if (!empty($row->shopify_order_id)) {
-                    $invoice_no .= ' <i style=" color: #95BF47 !important;" <span  class="fa fa-shopping-bag text-primary no-print" title="' . __('lang_v1.synced_from_woocommerce') . '"></i>';
-                }
-                if (!empty($row->exchange_exists) && $row->exchange_exists > 0) {
-                    $invoice_no .= ' &nbsp;<small class="label bg-orange label-round no-print" title="' . __('messages.exchange') . '"><i class="fas fa-exchange-alt"></i></small>';
-                }
-                if (!empty($row->return_exists) && $row->exchange_exists == 0) {
-                    $invoice_no .= ' &nbsp;<small class="label bg-red label-round no-print" title="' . __('lang_v1.some_qty_returned_from_sell') . '"><i class="fas fa-undo"></i></small>';
-                }
-                if (!empty($row->is_recurring)) {
-                    $invoice_no .= ' &nbsp;<small class="label bg-red label-round no-print" title="' . __('lang_v1.subscribed_invoice') . '"><i class="fas fa-recycle"></i></small>';
-                }
-
-                if (!empty($row->is_recurring_reminder)) {
-                    $invoice_no .= ' &nbsp;<small class="label bg-green label-round no-print" title="' . __('lang_v1.reminded_invoice') . '"><i class="fas fa-bell"></i></small>';
-                }
-
-                if (!empty($row->is_suspend)) {
-                    $invoice_no .= ' &nbsp;<small class="label bg-orange label-round no-print" title="' . __('lang_v1.suspended_sales') . '"><i class="fas fa-pause-circle"></i></small>';
-                }
-
-                if (!empty($row->recur_parent_id)) {
-                    $invoice_no .= ' &nbsp;<small class="label bg-info label-round no-print" title="' . __('lang_v1.subscription_invoice') . '"><i class="fas fa-recycle"></i></small>';
-                }
-                if ($row->ogf_is_sync) {
-                    $invoice_no .= ' <i style=" color: #00ec1f !important;" <span  class="fa fa-life-ring text-primary no-print" title="' . __('lang_v1.synced_to_ogf') . '"></i>';
-                }
-
-                return $invoice_no;
+                return $this->invoice_no($row);
             })
             ->editColumn('shipping_status', function ($row) use ($shipping_statuses) {
                 $status_color = !empty($this->shipping_status_colors[$row->shipping_status]) ? $this->shipping_status_colors[$row->shipping_status] : 'bg-gray';
@@ -861,277 +801,264 @@ class ReportController extends Controller
 
     public function product_datatable()
     {
-        try {
-            $business_id = auth()->user()->business_id;
-            $selling_price_group_count = SellingPriceGroup::countSellingPriceGroups($business_id);
-            $blade_name = $this->checkWhichProductReport($business_id);
+        $business_id = auth()->user()->business_id;
+        $selling_price_group_count = SellingPriceGroup::countSellingPriceGroups($business_id);
+        $blade_name = $this->checkWhichProductReport($business_id);
 
-            $variation_id = request()->get('variation_id', null);
+        $variation_id = request()->get('variation_id', null);
 
-            $query = Product::leftJoin('brands', 'products.brand_id', '=', 'brands.id')
-                ->join('units', 'products.unit_id', '=', 'units.id')
-                ->leftJoin('categories as c1', 'products.category_id', '=', 'c1.id')
-                ->leftJoin('categories as c2', 'products.sub_category_id', '=', 'c2.id')
-                ->leftJoin('tax_rates', 'products.tax', '=', 'tax_rates.id')
-                ->join('variations as v', 'v.product_id', '=', 'products.id')
-                ->leftJoin('variation_location_details as vld', 'vld.variation_id', '=', 'v.id')
-                ->where('products.business_id', $business_id)
-                ->where('products.type', '!=', 'modifier');
+        $query = Product::leftJoin('brands', 'products.brand_id', '=', 'brands.id')
+            ->join('units', 'products.unit_id', '=', 'units.id')
+            ->leftJoin('categories as c1', 'products.category_id', '=', 'c1.id')
+            ->leftJoin('categories as c2', 'products.sub_category_id', '=', 'c2.id')
+            ->leftJoin('tax_rates', 'products.tax', '=', 'tax_rates.id')
+            ->join('variations as v', 'v.product_id', '=', 'products.id')
+            ->leftJoin('variation_location_details as vld', 'vld.variation_id', '=', 'v.id')
+            ->where('products.business_id', $business_id)
+            ->where('products.type', '!=', 'modifier');
 
-            //Filter by location
-            $location_id = request()->get('location_id', null);
-            $permitted_locations = auth()->user()->permitted_locations();
+        //Filter by location
+        $location_id = request()->get('location_id', null);
+        $permitted_locations = auth()->user()->permitted_locations();
 
-            if (!empty($location_id) && $location_id != 'none') {
-                if ($permitted_locations == 'all' || in_array($location_id, $permitted_locations)) {
-                    $query->whereHas('product_locations', function ($query) use ($location_id) {
-                        $query->where('product_locations.location_id', '=', $location_id);
-                    });
-                }
-            } elseif ($location_id == 'none') {
-                $query->doesntHave('product_locations');
+        if (!empty($location_id) && $location_id != 'none') {
+            if ($permitted_locations == 'all' || in_array($location_id, $permitted_locations)) {
+                $query->whereHas('product_locations', function ($query) use ($location_id) {
+                    $query->where('product_locations.location_id', '=', $location_id);
+                });
+            }
+        } elseif ($location_id == 'none') {
+            $query->doesntHave('product_locations');
+        } else {
+            if ($permitted_locations != 'all') {
+                $query->whereHas('product_locations', function ($query) use ($permitted_locations) {
+                    $query->whereIn('product_locations.location_id', $permitted_locations);
+                });
             } else {
-                if ($permitted_locations != 'all') {
-                    $query->whereHas('product_locations', function ($query) use ($permitted_locations) {
-                        $query->whereIn('product_locations.location_id', $permitted_locations);
-                    });
-                } else {
-                    $query->with('product_locations');
-                }
-            }
-
-            $products = $query->select(
-                'products.id',
-                'products.name as product_name',
-                'products.type',
-                'c1.name as category',
-                'c2.name as sub_category',
-                'units.actual_name as unit',
-                'brands.name as brand',
-                'tax_rates.name as tax',
-                'products.sku',
-                'products.image',
-                'products.enable_stock',
-                'products.is_inactive',
-                'products.woocommerce_disable_sync',
-                'products.not_for_selling',
-                'products.product_custom_field1',
-                'products.product_custom_field2',
-                'products.product_custom_field3',
-                'products.product_custom_field4',
-                'products.created_at',
-                'products.updated_at',
-                DB::raw('SUM(vld.qty_available) as current_stock'),
-                DB::raw('MAX(v.sell_price_inc_tax) as max_price'),
-                DB::raw('MIN(v.sell_price_inc_tax) as min_price'),
-                DB::raw('MAX(v.dpp_inc_tax) as max_purchase_price'),
-                DB::raw('MIN(v.dpp_inc_tax) as min_purchase_price'),
-                'products.weight as weight'
-
-            )->groupBy('products.id');
-
-            if (!empty($variation_id)) {
-                $products->where('v.id', $variation_id);
-            }
-
-            $type = request()->get('type', null);
-            if (!empty($type)) {
-                $products->where('products.type', $type);
-            }
-
-            $category_id = request()->get('category_id', null);
-            if (!empty($category_id)) {
-                $products->where('products.category_id', $category_id);
-            }
-
-            $brand_id = request()->get('brand_id', null);
-            if (!empty($brand_id)) {
-                $products->where('products.brand_id', $brand_id);
-            }
-
-            $unit_id = request()->get('unit_id', null);
-            if (!empty($unit_id)) {
-                $products->where('products.unit_id', $unit_id);
-            }
-
-            $tax_id = request()->get('tax_id', null);
-            if (!empty($tax_id)) {
-                $products->where('products.tax', $tax_id);
-            }
-
-            $active_state = request()->get('active_state', null);
-            if ($active_state == 'active') {
-                $products->Active();
-            }
-            if ($active_state == 'inactive') {
-                $products->Inactive();
-            }
-            $not_for_selling = request()->get('not_for_selling', null);
-            if ($not_for_selling == 'true') {
-                $products->ProductNotForSales();
-            }
-
-
-            $enable_stock = request()->get('product_service_filter');
-            if ($enable_stock == "1") {
-                $products->where('products.enable_stock', 1);
-            }
-            if ($enable_stock == "0") {
-                $products->where('products.enable_stock', 0);
-            }
-
-            $woocommerce_enabled = request()->get('woocommerce_enabled', 0);
-            if ($woocommerce_enabled == 1) {
-                $products->where('products.woocommerce_disable_sync', 0);
-            }
-
-            if (!empty(request()->get('repair_model_id'))) {
-                $products->where('products.repair_model_id', request()->get('repair_model_id'));
-            }
-
-            $permissions_product_update = auth()->user()->can('product.update');
-            $permissions_product_delete = auth()->user()->can('product.delete');
-            $permissions_opening_stock = auth()->user()->can('product.opening_stock');
-            $permissions_product_create = auth()->user()->can('product.create');
-
-            return Datatables::of($products)
-                ->addColumn(
-                    'product_locations',
-                    function ($row) {
-                        return $row->product_locations->implode('name', ', ');
-                    }
-                )
-                ->editColumn('category', '{{$category}} @if(!empty($sub_category))<br/> -- {{$sub_category}}@endif')
-                ->addColumn(
-                    'action',
-                    function ($row) use ($selling_price_group_count,
-                        $permissions_product_update,
-                        $permissions_product_delete,
-                        $permissions_opening_stock,
-                        $permissions_product_create
-                    ) {
-                        $html =
-                            '<div class="btn-group"><button type="button" class="btn btn-info dropdown-toggle btn-xs" data-toggle="dropdown" aria-expanded="false">' . __("messages.actions") . '<span class="caret"></span><span class="sr-only">Toggle Dropdown</span></button><ul class="dropdown-menu dropdown-menu-left" role="menu"><li><a href="' . remote_action('LabelsController@show') . '?product_id=' . $row->id . '" data-toggle="tooltip" title="' . __('lang_v1.label_help') . '"><i class="fa fa-barcode"></i> ' . __('barcode.labels') . '</a></li>';
-
-                            $html .=
-                                '<li><a href="' . remote_action('ProductController@view',
-                                    [$row->id]) . '" class="view-product"><i class="fa fa-eye"></i> ' . __("messages.view") . '</a></li>';
-
-                        if ($permissions_product_update) {
-                            $html .=
-                                '<li><a href="' . remote_action('ProductController@edit',
-                                    [$row->id]) . '"><i class="glyphicon glyphicon-edit"></i> ' . __("messages.edit") . '</a></li>';
-                        }
-
-                        if ($permissions_product_delete) {
-                            $html .=
-                                '<li><a href="' . $this->remote_action('ProductController@destroy',
-                                    [$row->id]) . '" class="delete-product"><i class="fa fa-trash"></i> ' . __("messages.delete") . '</a></li>';
-                        }
-
-                        if ($row->is_inactive == 1) {
-                            $html .=
-                                '<li><a href="' . remote_action('ProductController@activate',
-                                    [$row->id]) . '" class="activate-product"><i class="fas fa-check-circle"></i> ' . __("lang_v1.reactivate") . '</a></li>';
-                        }
-
-                        $html .= '<li class="divider"></li>';
-
-                        if ($row->enable_stock == 1 && $permissions_opening_stock) {
-                            $html .=
-                                '<li><a href="#" data-href="' . remote_action('OpeningStockController@add',
-                                    ['product_id' => $row->id]) . '" class="add-opening-stock"><i class="fa fa-database"></i> ' . __("lang_v1.add_edit_opening_stock") . '</a></li>';
-                        }
-
-                            $html .=
-                                '<li><a href="' . remote_action('ProductController@productStockHistory',
-                                    [$row->id]) . '"><i class="fas fa-history"></i> ' . __("lang_v1.product_stock_history") . '</a></li>';
-
-
-                        if ($permissions_product_create) {
-
-                            if ($selling_price_group_count > 0) {
-                                $html .=
-                                    '<li><a href="' . remote_action('ProductController@addSellingPrices',
-                                        [$row->id]) . '"><i class="fas fa-money-bill-alt"></i> ' . __("lang_v1.add_selling_price_group_prices") . '</a></li>';
-                            }
-
-                            $html .=
-                                '<li><a href="' . remote_action('ProductController@create',
-                                    ["d" => $row->id]) . '"><i class="fa fa-copy"></i> ' . __("lang_v1.duplicate_product") . '</a></li>';
-                        }
-
-                        $html .= '</ul></div>';
-
-                        return $html;
-                    }
-                )
-                ->editColumn('product', function ($row) {
-                    $html = "<div> " . $row->product_name . '</br>';
-                    if ($row->is_inactive == 1) {
-                        $html .= ' <span class="label bg-gray">' . __("lang_v1.inactive") . '</span>';
-                    }
-                    if ($row->not_for_selling == 1) {
-                        $html .= ' <span class="label bg-gray">' . __("lang_v1.not_for_selling") . '</span>';
-                    }
-                    $html .= '</div>';
-                    return $html;
-                })
-                ->editColumn('image', function ($row) {
-                    return '<div style="display: flex;"><img src="' . $row->image_url . '" alt="Product image" class="product-thumbnail-small"></div>';
-                })
-                ->editColumn('type', '@lang("lang_v1." . $type)')
-                ->addColumn('mass_delete', function ($row) {
-                    return '<input type="checkbox" class="row-select" value="' . $row->id . '">';
-                })
-                ->editColumn('current_stock', function ($row) use ($blade_name) {
-                    if ($blade_name == 'new_list') {
-                        $current_stock = $this->productUtil->num_uf($row->current_stock);
-                    } else {
-                        $current_stock = $this->productUtil->num_uf($row->current_stock) . " " . $row->unit;
-                    }
-                    return $current_stock;
-                })
-                ->addColumn('purchase_price', function ($row) {
-
-                    $min_purchase_price = $this->productUtil->num_f($row->min_purchase_price);
-                    if ($row->max_purchase_price != $row->min_purchase_price && $row->type == "variable") {
-                        return '<div style="white-space: nowrap;"><span class="display_currency" data-currency_symbol="true">' . $min_purchase_price . '</span> - <span class="display_currency" data-currency_symbol="true">' . $this->productUtil->num_f($row->max_purchase_price) . '</span></div>';
-                    } else {
-                        return '<span class="display_currency" data-currency_symbol="true">' . $min_purchase_price . '</span>';
-                    }
-                })
-                ->editColumn('selling_price', function ($row) {
-                    $min_price = $this->productUtil->num_f($row->min_price);
-                    if ($row->max_price != $row->min_price && $row->type == "variable") {
-                        return '<div style="white-space: nowrap;"><span class="display_currency" data-currency_symbol="true">' . $min_price . '</span> - <span class="display_currency" data-currency_symbol="true">' . $this->productUtil->num_f($row->max_price) . '</span></div>';
-                    } else {
-                        return '<span class="display_currency" data-currency_symbol="true">' . $min_price . '</span>';
-                    }
-                })
-                ->editColumn('created_at', '{{@format_datetime($created_at)}}')
-                ->editColumn('updated_at', '{{@format_datetime($updated_at)}}')
-                ->filterColumn('products.sku', function ($query, $keyword) {
-                    $query->whereHas('variations', function ($q) use ($keyword) {
-                        $q->where('sub_sku', 'like', "%{$keyword}%");
-                    })
-                        ->orWhere('products.sku', 'like', "%{$keyword}%");
-                })
-                ->setRowAttr([
-                    'data-href' => function ($row) {
-                        return remote_action('ProductController@view', [$row->id]);
-                    }
-                ])
-                ->rawColumns([
-                    'action', 'image', 'mass_delete', 'product', 'selling_price', 'purchase_price', 'category',
-                    'created_at', 'updated_at'
-                ])
-                ->make(true);
-        } catch (Exception $e) {
-            if (request()->input('test_purposes')) {
-                dd($e);
+                $query->with('product_locations');
             }
         }
+
+        $products = $query->select(
+            'products.id',
+            'products.name as product_name',
+            'products.type',
+            'c1.name as category',
+            'c2.name as sub_category',
+            'units.actual_name as unit',
+            'brands.name as brand',
+            'tax_rates.name as tax',
+            'products.sku',
+            'products.image',
+            'products.enable_stock',
+            'products.is_inactive',
+            'products.woocommerce_disable_sync',
+            'products.not_for_selling',
+            'products.product_custom_field1',
+            'products.product_custom_field2',
+            'products.product_custom_field3',
+            'products.product_custom_field4',
+            'products.created_at',
+            'products.updated_at',
+            DB::raw('SUM(vld.qty_available) as current_stock'),
+            DB::raw('MAX(v.sell_price_inc_tax) as max_price'),
+            DB::raw('MIN(v.sell_price_inc_tax) as min_price'),
+            DB::raw('MAX(v.dpp_inc_tax) as max_purchase_price'),
+            DB::raw('MIN(v.dpp_inc_tax) as min_purchase_price'),
+            'products.weight as weight'
+
+        )->groupBy('products.id');
+
+        if (!empty($variation_id)) {
+            $products->where('v.id', $variation_id);
+        }
+
+        $type = request()->get('type', null);
+        if (!empty($type)) {
+            $products->where('products.type', $type);
+        }
+
+        $category_id = request()->get('category_id', null);
+        if (!empty($category_id)) {
+            $products->where('products.category_id', $category_id);
+        }
+
+        $brand_id = request()->get('brand_id', null);
+        if (!empty($brand_id)) {
+            $products->where('products.brand_id', $brand_id);
+        }
+
+        $unit_id = request()->get('unit_id', null);
+        if (!empty($unit_id)) {
+            $products->where('products.unit_id', $unit_id);
+        }
+
+        $tax_id = request()->get('tax_id', null);
+        if (!empty($tax_id)) {
+            $products->where('products.tax', $tax_id);
+        }
+
+        $active_state = request()->get('active_state', null);
+        if ($active_state == 'active') {
+            $products->Active();
+        }
+        if ($active_state == 'inactive') {
+            $products->Inactive();
+        }
+        $not_for_selling = request()->get('not_for_selling', null);
+        if ($not_for_selling == 'true') {
+            $products->ProductNotForSales();
+        }
+
+
+        $enable_stock = request()->get('product_service_filter');
+        if ($enable_stock == "1") {
+            $products->where('products.enable_stock', 1);
+        }
+        if ($enable_stock == "0") {
+            $products->where('products.enable_stock', 0);
+        }
+
+        $woocommerce_enabled = request()->get('woocommerce_enabled', 0);
+        if ($woocommerce_enabled == 1) {
+            $products->where('products.woocommerce_disable_sync', 0);
+        }
+
+        if (!empty(request()->get('repair_model_id'))) {
+            $products->where('products.repair_model_id', request()->get('repair_model_id'));
+        }
+
+        $permissions_product_update = auth()->user()->can('product.update');
+        $permissions_product_delete = auth()->user()->can('product.delete');
+        $permissions_opening_stock = auth()->user()->can('product.opening_stock');
+        $permissions_product_create = auth()->user()->can('product.create');
+
+        return Datatables::of($products)
+            ->addColumn(
+                'product_locations',
+                function ($row) {
+                    return $row->product_locations->implode('name', ', ');
+                }
+            )
+            ->editColumn('category', '{{$category}} @if(!empty($sub_category))<br/> -- {{$sub_category}}@endif')
+            ->addColumn(
+                'action',
+                function ($row) use (
+                    $selling_price_group_count,
+                    $permissions_product_update,
+                    $permissions_product_delete,
+                    $permissions_opening_stock,
+                    $permissions_product_create
+                ) {
+                    $html =
+                        '<div class="btn-group"><button type="button" class="btn btn-info dropdown-toggle btn-xs" data-toggle="dropdown" aria-expanded="false">' . __("messages.actions") . '<span class="caret"></span><span class="sr-only">Toggle Dropdown</span></button><ul class="dropdown-menu dropdown-menu-left" role="menu"><li><a href="' . remote_action('LabelsController@show') . '?product_id=' . $row->id . '" data-toggle="tooltip" title="' . __('lang_v1.label_help') . '"><i class="fa fa-barcode"></i> ' . __('barcode.labels') . '</a></li>';
+
+                    $html .=
+                        '<li><a href="' . remote_url('/products/view/' . $row->id) . '" class="view-product"><i class="fa fa-eye"></i> ' . __("messages.view") . '</a></li>';
+
+                    if ($permissions_product_update) {
+                        $html .=
+                            '<li><a href="' . remote_url('products/' . $row->id . '/edit') . '"><i class="glyphicon glyphicon-edit"></i> ' . __("messages.edit") . '</a></li>';
+                    }
+
+                    if ($permissions_product_delete) {
+                        $html .=
+                            '<li><a href="' . remote_url('products/' . $row->id . '/delete') . '" class="delete-product"><i class="fa fa-trash"></i> ' . __("messages.delete") . '</a></li>';
+                    }
+
+                    if ($row->is_inactive == 1) {
+                        $html .=
+                            '<li><a href="' . remote_url('products/activate/' . $row->id) . '" class="activate-product"><i class="fas fa-check-circle"></i> ' . __("lang_v1.reactivate") . '</a></li>';
+                    }
+
+                    $html .= '<li class="divider"></li>';
+
+                    if ($row->enable_stock == 1 && $permissions_opening_stock) {
+                        $html .=
+                            '<li><a href="#" data-href="' . remote_url('/opening-stock/add/' . $row->id) . '" class="add-opening-stock"><i class="fa fa-database"></i> ' . __("lang_v1.add_edit_opening_stock") . '</a></li>';
+                    }
+
+                    $html .=
+                        '<li><a href="' . remote_url('products/stock-history/' . $row->id) . '"><i class="fas fa-history"></i> ' . __("lang_v1.product_stock_history") . '</a></li>';
+
+
+                    if ($permissions_product_create) {
+
+                        if ($selling_price_group_count > 0) {
+                            $html .=
+                                '<li><a href="' . remote_url('products/add-selling-prices/' . $row->id) . '"><i class="fas fa-money-bill-alt"></i> ' . __("lang_v1.add_selling_price_group_prices") . '</a></li>';
+                        }
+
+                        $html .=
+                            '<li><a href="' . remote_url('ProductController@create', $row->id) . '"><i class="fa fa-copy"></i> ' . __("lang_v1.duplicate_product") . '</a></li>';
+                    }
+
+                    $html .= '</ul></div>';
+
+                    return $html;
+                }
+            )
+            ->editColumn('product', function ($row) {
+                $html = "<div> " . $row->product_name . '</br>';
+                if ($row->is_inactive == 1) {
+                    $html .= ' <span class="label bg-gray">' . __("lang_v1.inactive") . '</span>';
+                }
+                if ($row->not_for_selling == 1) {
+                    $html .= ' <span class="label bg-gray">' . __("lang_v1.not_for_selling") . '</span>';
+                }
+                $html .= '</div>';
+                return $html;
+            })
+            ->editColumn('image', function ($row) {
+                return '<div style="display: flex;"><img src="' . $row->image_url . '" alt="Product image" class="product-thumbnail-small"></div>';
+            })
+            ->editColumn('type', '@lang("lang_v1." . $type)')
+            ->addColumn('mass_delete', function ($row) {
+                return '<input type="checkbox" class="row-select" value="' . $row->id . '">';
+            })
+            ->editColumn('current_stock', function ($row) use ($blade_name) {
+                if ($blade_name == 'new_list') {
+                    $current_stock = $this->productUtil->num_uf($row->current_stock);
+                } else {
+                    $current_stock = $this->productUtil->num_uf($row->current_stock) . " " . $row->unit;
+                }
+                return $current_stock;
+            })
+            ->addColumn('purchase_price', function ($row) {
+
+                $min_purchase_price = $this->productUtil->num_f($row->min_purchase_price);
+                if ($row->max_purchase_price != $row->min_purchase_price && $row->type == "variable") {
+                    return '<div style="white-space: nowrap;"><span class="display_currency" data-currency_symbol="true">' . $min_purchase_price . '</span> - <span class="display_currency" data-currency_symbol="true">' . $this->productUtil->num_f($row->max_purchase_price) . '</span></div>';
+                } else {
+                    return '<span class="display_currency" data-currency_symbol="true">' . $min_purchase_price . '</span>';
+                }
+            })
+            ->editColumn('selling_price', function ($row) {
+                $min_price = $this->productUtil->num_f($row->min_price);
+                if ($row->max_price != $row->min_price && $row->type == "variable") {
+                    return '<div style="white-space: nowrap;"><span class="display_currency" data-currency_symbol="true">' . $min_price . '</span> - <span class="display_currency" data-currency_symbol="true">' . $this->productUtil->num_f($row->max_price) . '</span></div>';
+                } else {
+                    return '<span class="display_currency" data-currency_symbol="true">' . $min_price . '</span>';
+                }
+            })
+            ->editColumn('created_at', '{{@format_datetime($created_at)}}')
+            ->editColumn('updated_at', '{{@format_datetime($updated_at)}}')
+            ->filterColumn('products.sku', function ($query, $keyword) {
+                $query->whereHas('variations', function ($q) use ($keyword) {
+                    $q->where('sub_sku', 'like', "%{$keyword}%");
+                })
+                    ->orWhere('products.sku', 'like', "%{$keyword}%");
+            })
+            ->setRowAttr([
+                'data-href' => function ($row) {
+                    return remote_url('/products/view/' . $row->id);
+                }
+            ])
+            ->rawColumns([
+                'action', 'image', 'mass_delete', 'product', 'selling_price', 'purchase_price', 'category',
+                'created_at', 'updated_at'
+            ])
+            ->make(true);
     }
 
     /**
@@ -1235,6 +1162,9 @@ class ReportController extends Controller
             $sells->addSelect('transactions.is_recurring_reminder');
         }
 
+        $date_format = auth()->user()->business->date_format;
+        $time_format = (auth()->user()->business->time_format = '24') ? 'H:i' : 'h:i A';
+
         $datatable = Datatables::of($sells)
             ->addColumn(
                 'action',
@@ -1242,8 +1172,7 @@ class ReportController extends Controller
                     $html = '<div class="btn-group no-print">
                                 <button type="button" class="btn btn-warning btn-xs"
                                     data-toggle="dropdown" aria-expanded="false">' .
-                        '<span style="bacground:red" href="#" data-href="' . remote_action("SellController@return_sale",
-                            [$row->id]) . '" class="btn-modal" data-container=".view_modal"><i class="fas fa-undo" aria-hidden="true"></i> ' . __("lang_v1.sell_return") . '</sapan>
+                        '<span style="bacground:red" href="#" data-href="' . remote_url("sells_return/".$row->id) . '" class="btn-modal" data-container=".view_modal"><i class="fas fa-undo" aria-hidden="true"></i> ' . __("lang_v1.sell_return") . '</sapan>
                                 </button>';
 
                     $html .= '</div>';
@@ -1256,130 +1185,33 @@ class ReportController extends Controller
                 'final_total',
                 '<span class="display_currency final-total" data-currency_symbol="true" data-orig-value="{{$final_total}}">{{$final_total}}</span>'
             )
-            ->editColumn(
-                'tax_amount',
-                '<span class="display_currency total-tax" data-currency_symbol="true" data-orig-value="{{$tax_amount}}">{{$tax_amount}}</span>'
-            )
-            ->editColumn(
-                'total_paid',
-                '<span class="display_currency total-paid" data-currency_symbol="true" data-orig-value="{{$total_paid}}">{{$total_paid}}</span>'
-            )
-            ->editColumn(
-                'total_before_tax',
-                '<span class="display_currency total_before_tax" data-currency_symbol="true" data-orig-value="{{$total_before_tax}}">{{$total_before_tax}}</span>'
-            )
-            ->editColumn(
-                'discount_amount',
-                function ($row) {
-                    $discount = !empty($row->discount_amount) ? $row->discount_amount : 0;
-
-                    if (!empty($discount) && $row->discount_type == 'percentage') {
-                        $discount = $row->total_before_tax * ($discount / 100);
-                    }
-
-                    return '<span class="display_currency total-discount" data-currency_symbol="true" data-orig-value="' . $discount . '">' . $discount . '</span>';
-                }
-            )
             ->editColumn('transaction_date',
-                function ($row) {
-                    $carbonDate = Carbon::createFromFormat('Y-m-d H:i:s', $row->transaction_date);
-                    $date_format = auth()->user()->business->date_format;
-                    $time_format = (auth()->user()->business->time_format = '24') ? 'H:i' : 'h:i A';
-                    $datetime_format = $date_format . ' ' . $time_format;
-                    return $carbonDate->format($datetime_format);
-                })
+            function ($row) use($date_format,$time_format) {
+                $carbonDate = Carbon::createFromFormat('Y-m-d H:i:s', $row->transaction_date);
+                $datetime_format = $date_format . ' ' . $time_format;
+                return $carbonDate->format($datetime_format);
+            })
             ->editColumn(
                 'payment_status',
                 function ($row) {
                     $payment_status = Transaction::getPaymentStatus($row);
-                    return (string)view('sell.partials.payment_status',
+                    return (string)view('supports.payment_status',
                         ['payment_status' => $payment_status, 'id' => $row->id]);
                 }
             )
-            ->editColumn(
-                'types_of_service_name',
-                '<span class="service-type-label" data-orig-value="{{$types_of_service_name}}" data-status-name="{{$types_of_service_name}}">{{$types_of_service_name}}</span>'
-            )
-            ->addColumn('total_remaining', function ($row) {
-                $total_remaining = $row->final_total - $row->total_paid;
-                $total_remaining_html = '<span class="display_currency payment_due" data-currency_symbol="true" data-orig-value="' . $total_remaining . '">' . $total_remaining . '</span>';
-
-
-                return $total_remaining_html;
-            })
-            ->addColumn('return_due', function ($row) {
-                $return_due_html = '';
-                if (!empty($row->return_exists)) {
-                    $return_due = $row->amount_return - $row->return_paid;
-                    $return_due_html .= '<a href="' . remote_action("TransactionPaymentController@show",
-                            [$row->return_transaction_id]) . '" class="view_purchase_return_payment_modal"><span class="display_currency sell_return_due" data-currency_symbol="true" data-orig-value="' . $return_due . '">' . $return_due . '</span></a>';
-                }
-
-                return $return_due_html;
-            })
             ->addColumn('Business_name', function ($row) {
                 return $row->supplier_business_name;
             })
             ->addColumn('contact_no', function ($row) {
                 return $row->customer_mobile_number;
             })
-            ->addColumn('address', function ($row) {
-                $address_line_1 = '';
-                $address_line_2 = '';
-                $city = '';
-                $state = '';
-                $country = '';
-                $zip_code = '';
-                if (!empty($row->address_line_1)) {
-                    $address_line_1 = $row->address_line_1 . ',';
-                }
-                if (!empty($row->address_line_2)) {
-                    $address_line_2 = $row->address_line_2 . ',';
-                }
-                if (!empty($row->city)) {
-                    $city = $row->city . ',';
-                }
-                if (!empty($row->state)) {
-                    $state = $row->state . ',';
-                }
-                if (!empty($row->country)) {
-                    $country = $row->country . ',';
-                }
-                if (!empty($row->zip_code)) {
-                    $zip_code = $row->zip_code . '';
-                }
-                $address = '<div>' . $address_line_1 . '' . $address_line_2 . '' . $city . '' . $state . '' . $country . '' . $zip_code . '</div>';
-                return $address;
-            })
             ->editColumn('invoice_no', function ($row) {
-                $invoice_no = $row->invoice_no;
-                if (!empty($row->woocommerce_order_id)) {
-                    $invoice_no .= ' <i class="fab fa-wordpress text-primary no-print" title="' . __('lang_v1.synced_from_woocommerce') . '"></i>';
-                }
-                if (!empty($row->return_exists)) {
-                    $invoice_no .= ' &nbsp;<small class="label bg-red label-round no-print" title="' . __('lang_v1.some_qty_returned_from_sell') . '"><i class="fas fa-undo"></i></small>';
-                }
-                if (!empty($row->is_recurring)) {
-                    $invoice_no .= ' &nbsp;<small class="label bg-red label-round no-print" title="' . __('lang_v1.subscribed_invoice') . '"><i class="fas fa-recycle"></i></small>';
-                }
-
-                if (!empty($row->is_recurring_reminder)) {
-                    $invoice_no .= ' &nbsp;<small class="label bg-green label-round no-print" title="' . __('lang_v1.reminded_invoice') . '"><i class="fas fa-bell"></i></small>';
-                }
-
-                if (!empty($row->recur_parent_id)) {
-                    $invoice_no .= ' &nbsp;<small class="label bg-info label-round no-print" title="' . __('lang_v1.subscription_invoice') . '"><i class="fas fa-recycle"></i></small>';
-                }
-
-                return $invoice_no;
+                return $this->invoice_no($row);
             })
-            ->editColumn('shipping_status', function ($row) use ($shipping_statuses) {
-                $status_color = !empty($this->shipping_status_colors[$row->shipping_status]) ? $this->shipping_status_colors[$row->shipping_status] : 'bg-gray';
-                $status = !empty($row->shipping_status) ? '<a href="#" class="btn-modal" data-href="' . remote_action('SellController@editShipping',
-                        [$row->id]) . '" data-container=".view_modal"><span class="label ' . $status_color . '">' . $shipping_statuses[$row->shipping_status] . '</span></a>' : '';
-
-                return $status;
-            })
+            ->editColumn(
+                'total_paid',
+                '<span class="display_currency total-paid" data-currency_symbol="true" data-orig-value="{{$total_paid}}">{{$total_paid}}</span>'
+            )
             ->addColumn('payment_methods', function ($row) use ($payment_types) {
                 $methods = array_unique($row->payment_lines->pluck('method')->toArray());
                 $count = count($methods);
@@ -1390,39 +1222,30 @@ class ReportController extends Controller
                     $payment_method = __('lang_v1.checkout_multi_pay');
                 }
 
-                $html = !empty($payment_method) ? '<span class="payment-method" data-orig-value="' . $payment_method . '" data-status-name="' . $payment_method . '">' . $payment_method . '</span>' : '';
-
-                return $html;
+                return !empty($payment_method) ? '<span class="payment-method" data-orig-value="' . $payment_method . '" data-status-name="' . $payment_method . '">' . $payment_method . '</span>' : '';
             })
-            ->editColumn(
-                'sale_type',
-                '<span class="service-type-label" data-orig-value="{{$sale_type}}" data-status-name="{{$sale_type}}">{{$sale_type}}</span>'
-            )
-            ->editColumn('multi_sale_type', function ($row) {
-
-                $msts = MultiSaleTypes::where('transaction_id', $row->id)->leftJoin('sale_type_multis as sts',
-                    'multi_sale_types.sale_type', '=', 'sts.id')->pluck('sts.name');
-                $multi_sale_type = null;
-                foreach ($msts as $mst) {
-                    $multi_sale_type .= '&nbsp;' . $mst . '</br>';
+            ->addColumn('total_remaining', function ($row) {
+                $total_remaining = $row->final_total - $row->total_paid;
+                return '<span class="display_currency payment_due" data-currency_symbol="true" data-orig-value="{{$total_remaining}}">'.$total_remaining.'</span>';
+            })
+            ->addColumn('return_due', function ($row) {
+                $return_due_html = '';
+                if (!empty($row->return_exists)) {
+                    $return_due = $row->amount_return - $row->return_paid;
+                    $return_due_html .= '<a href="'.remote_url("payments/".$row->return_transaction_id).'" class="view_purchase_return_payment_modal"><span class="display_currency sell_return_due" data-currency_symbol="true" data-orig-value="'.$return_due.'">'.$return_due.'</span></a>';
                 }
-                return $multi_sale_type;
 
+                return $return_due_html;
             })
             ->setRowAttr([
                 'data-href' => function ($row) {
-                    if (auth()->user()->can("sell.view") || auth()->user()->can("view_own_sell_only")) {
-                        return remote_action('SellController@show', [$row->id]);
-                    } else {
-                        return '';
-                    }
+                        return remote_url('sells/'.$row->id);
                 }
             ]);
 
         $rawColumns = [
-            'final_total', 'Business_name', 'address', 'action', 'total_paid', 'total_remaining', 'contact_no',
-            'payment_status', 'invoice_no', 'discount_amount', 'tax_amount', 'total_before_tax', 'shipping_status',
-            'types_of_service_name', 'payment_methods', 'return_due', 'sale_type', 'multi_sale_type'
+            'final_total', 'Business_name','action','contact_no','total_paid','return_due',
+            'payment_status', 'invoice_no','total_remaining','payment_methods'
         ];
         return $datatable->rawColumns($rawColumns)
             ->make(true);
@@ -1436,5 +1259,82 @@ class ReportController extends Controller
         return Datatables::of($product)
             ->make(true);
 
+    }
+
+    /**
+     * @param $row
+     * @return string
+     */
+    function getFullAddress($row): string
+    {
+        $address_line_1 = '';
+        $address_line_2 = '';
+        $city = '';
+        $state = '';
+        $country = '';
+        $zip_code = '';
+        if (!empty($row->address_line_1)) {
+            $address_line_1 = $row->address_line_1 . ',';
+        }
+        if (!empty($row->address_line_2)) {
+            $address_line_2 = $row->address_line_2 . ',';
+        }
+        if (!empty($row->city)) {
+            $city = $row->city . ',';
+        }
+        if (!empty($row->state)) {
+            $state = $row->state . ',';
+        }
+        if (!empty($row->country)) {
+            $country = $row->country . ',';
+        }
+        if (!empty($row->zip_code)) {
+            $zip_code = $row->zip_code . '';
+        }
+        return '<div>' . $address_line_1 . '' . $address_line_2 . '' . $city . '' . $state . '' . $country . '' . $zip_code . '</div>';
+    }
+
+    /**
+     * @param $row
+     * @return string
+     */
+    function invoice_no($row): string
+    {
+        $invoice_no = $row->invoice_no;
+        if ($row->is_cod) {
+            $invoice_no .= ' <i class="fa fa-motorcycle text-primary no-print" title="' . __('lang_v1.synced_from_woocommerce') . '"></i>';
+        }
+        if (!empty($row->woocommerce_order_id)) {
+            $invoice_no .= ' <i class="fab fa-wordpress text-primary no-print" title="' . __('lang_v1.synced_from_woocommerce') . '"></i>';
+        }
+        if (!empty($row->shopify_order_id)) {
+            $invoice_no .= ' <i style=" color: #95BF47 !important;" <span  class="fa fa-shopping-bag text-primary no-print" title="' . __('lang_v1.synced_from_woocommerce') . '"></i>';
+        }
+        if (!empty($row->exchange_exists) && $row->exchange_exists > 0) {
+            $invoice_no .= ' &nbsp;<small class="label bg-orange label-round no-print" title="' . __('messages.exchange') . '"><i class="fas fa-exchange-alt"></i></small>';
+        }
+        if (!empty($row->return_exists) && $row->exchange_exists == 0) {
+            $invoice_no .= ' &nbsp;<small class="label bg-red label-round no-print" title="' . __('lang_v1.some_qty_returned_from_sell') . '"><i class="fas fa-undo"></i></small>';
+        }
+        if (!empty($row->is_recurring)) {
+            $invoice_no .= ' &nbsp;<small class="label bg-red label-round no-print" title="' . __('lang_v1.subscribed_invoice') . '"><i class="fas fa-recycle"></i></small>';
+        }
+
+        if (!empty($row->is_recurring_reminder)) {
+            $invoice_no .= ' &nbsp;<small class="label bg-green label-round no-print" title="' . __('lang_v1.reminded_invoice') . '"><i class="fas fa-bell"></i></small>';
+        }
+
+        if (!empty($row->is_suspend)) {
+            $invoice_no .= ' &nbsp;<small class="label bg-orange label-round no-print" title="' . __('lang_v1.suspended_sales') . '"><i class="fas fa-pause-circle"></i></small>';
+        }
+
+        if (!empty($row->recur_parent_id)) {
+            $invoice_no .= ' &nbsp;<small class="label bg-info label-round no-print" title="' . __('lang_v1.subscription_invoice') . '"><i class="fas fa-recycle"></i></small>';
+        }
+        if ($row->ogf_is_sync) {
+            $invoice_no .= ' <i style=" color: #00ec1f !important;" <span  class="fa fa-life-ring text-primary no-print" title="' . __('lang_v1.synced_to_ogf') . '"></i>';
+        }
+
+        return $invoice_no;
     }
 }
