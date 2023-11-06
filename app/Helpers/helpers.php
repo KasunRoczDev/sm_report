@@ -1,53 +1,5 @@
 <?php
 
-if (!function_exists('remote_action')) {
-    /**
-     * Generate the REMOTE URL to a controller action.
-     *
-     * @param  string|array  $name
-     * @param  mixed  $parameters
-     * @param  bool  $absolute
-     * @return string
-     */
-    function remote_action($name, $parameters = [], $absolute = true): string
-    {
-        $action_url = app('url')->action($name, $parameters, $absolute);
-
-        return return_remote_fn_url($action_url);
-    }
-}
-
-if (!function_exists('remote_route')) {
-    /**
-     * Generate the REMOTE URL to a controller route.
-     *
-     * @param  string|array  $name
-     * @param  mixed  $parameters
-     * @param  bool  $absolute
-     * @return string
-     */
-    function remote_route($name, $parameters = [], $absolute = true): string
-    {
-        $action_url = app('url')->route($name, $parameters, $absolute);
-
-        return return_remote_fn_url($action_url);
-    }
-}
-
-if (!function_exists('remote_report_api_server')) {
-    /**
-     * Generate the URL for reporting to the API server.
-     *
-     * @param  string  $url
-     * @return string
-     */
-    function remote_report_api_server(string $url): string
-    {
-        $base_route = env('REPORT_API_SERVER').'/api/remote-api';
-        return $base_route.'/'.$url;
-    }
-}
-
 if (!function_exists('remote_asset')) {
     /**
      * Generate an asset path for the application.
@@ -64,6 +16,14 @@ if (!function_exists('remote_asset')) {
     }
 
 }
+
+if (!function_exists('remote_url')) {
+    function remote_url($url_para): string
+    {
+        return request()->header('origin').'/'.$url_para;
+    }
+}
+
 function return_remote_fn_url($asset_url): array|string
 {
     if (!empty(parse_url(request()->header('origin'))['host'])) {
@@ -76,9 +36,4 @@ function return_remote_fn_url($asset_url): array|string
     }
 }
 
-if (!function_exists('remote_url')) {
-    function remote_url($url_para): string
-    {
-        return request()->header('origin').'/'.$url_para;
-    }
-}
+

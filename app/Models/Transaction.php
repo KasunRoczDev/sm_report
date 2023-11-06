@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Jobs\CallDBProcedure;
 use App\Traits\QueueThisJob;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 
 class Transaction extends Model

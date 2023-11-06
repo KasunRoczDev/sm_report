@@ -361,11 +361,35 @@ class ReportController extends Controller
 
         $sells->addSelect('transactions.is_suspend');
 
+        $date_format = auth()->user()->business->date_format;
+        $time_format = (auth()->user()->business->time_format = '24') ? 'H:i' : 'h:i A';
+        $is_admin = auth()->user()->can('Admin');
+        $minimum_price_override=auth()->user()->can('sell.minimu_price_override');
+        $request_length_in_between = (request()->length < 500 && request()->length != -1) ?? false;
+        $permission_sell_update = auth()->user()->can('sell.update');
+        $permission_sell_return = auth()->user()->can('access_sell_return');
+        $permission_direct_sell = auth()->user()->can('direct_sell.access');
+        $permission_sell_view = auth()->user()->can('sell.view');
+        $permission_access_shipping = auth()->user()->can('access_shipping');
+        $permission_sell_create = auth()->user()->can('sell.create');
+        $permission_sell_payment = auth()->user()->can('sell.payments');
+
         $datatable = Datatables::of($sells)
             ->addColumn(
                 'action',
-                function ($row) use ($only_shipments) {
-                    if (request()->length < 500 && request()->length != -1) {
+                function ($row) use ($only_shipments,
+                    $request_length_in_between,
+                    $permission_sell_update,
+                    $permission_sell_return,
+                    $permission_direct_sell,
+                    $permission_sell_view,
+                    $permission_access_shipping,
+                    $is_admin,
+                    $permission_sell_create,
+                    $minimum_price_override,
+                    $permission_sell_payment
+                ) {
+                    if ($request_length_in_between) {
                         $html = '<div class="btn-group">
                                     <button type="button" class="btn btn-info dropdown-toggle btn-xs"
                                         data-toggle="dropdown" aria-expanded="false">' .
@@ -380,55 +404,54 @@ class ReportController extends Controller
                         if (!$only_shipments) {
                             //edit Button hide
                             if ($row->is_direct_sale == 0) {
-                                if (auth()->user()->can('sell.update')) {
+                                if ($permission_sell_update) {
                                     $html .= '<li ><a target="_blank" href="' . remote_url('pos/'.$row->id.'/edit') . '"><i class="fas fa-edit"></i> ' . __('messages.edit') . '</a></li>';
                                 }
-                                if (auth()->user()->can('access_sell_return')) {
+                                if ($permission_sell_return) {
                                     $html .= '<li><a href="#" class="cancel-invoice" data-href="' . remote_url('sell-return-all/add/'.$row->id) . '"><i class="fas fa-window-close" aria-hidden="true"></i> ' . __('lang_v1.cancel') . '</a></li>';
                                 }
                             } else {
-                                if (auth()->user()->can('direct_sell.access')) {
+                                if ($permission_direct_sell) {
                                     $html .= '<li ><a target="_blank" href="' . remote_url('sells/'.$row->id) . '"><i class="fas fa-edit"></i> ' . __('messages.edit') . '</a></li>';
                                 }
-                                if (auth()->user()->can('access_sell_return')) {
+                                if ($permission_sell_return) {
                                     $html .= '<li><a href="#" class="cancel-invoice" data-href="' . remote_url('sell-return-all/add/'.$row->id) . '"><i class="fas fa-window-close" aria-hidden="true"></i> ' . __('lang_v1.cancel') . '</a></li>';
                                 }
                             }
                         }
-                        if (auth()->user()->can('sell.view') || auth()->user()->can('direct_sell.access')) {
+                        if ($permission_sell_view|| $permission_direct_sell) {
                             $html .= '<li><a href="#" class="print-invoice" data-href="' . remote_url('sells/'.$row->id.'/print') . '?is_suspend=' . $row->is_suspend . '"><i class="fas fa-print" aria-hidden="true"></i> ' . __('messages.print') . '</a></li>
                                 <li><a href="#" class="print-invoice" data-href="' . remote_url('sells/'.$row->id.'/print') . '?package_slip=true"><i class="fas fa-file-alt" aria-hidden="true"></i> ' . __('lang_v1.packing_slip') . '</a></li>
                                 <li><a href="#" class="print-invoice" data-href="' . remote_url('sells/'.$row->id.'/print') . '?waybill_summary=true"><i class="fas fa-file-alt" aria-hidden="true"></i> ' . __('lang_v1.waybill_summary') . '</a></li>
                                 <li><a href="#" class="print-invoice" data-href="' . remote_url('sells/'.$row->id.'/print') . '?waybill_detailed=true"><i class="fas fa-file-alt" aria-hidden="true"></i> ' . __('lang_v1.waybill_detailed') . '</a></li>
                                 <li><a href="#" class="print-invoice" data-href="' . remote_url('sells/'.$row->id.'/print') . '?delivery_condition=true"><i class="fa fa-check-square" aria-hidden="true"></i> ' . __('lang_v1.delivery_condition') . '</a></li>';
                         }
-                        if (auth()->user()->can('access_shipping')) {
+                        if ($permission_access_shipping) {
                             $html .= '<li><a href="#" data-href="' . remote_url('sells/edit-shipping/'.$row->id) . '" class="btn-modal" data-container=".view_modal"><i class="fas fa-truck" aria-hidden="true"></i>' . __('lang_v1.edit_shipping') . '</a></li>';
                         }
                         if (!$only_shipments) {
-                            $is_admin = $this->moduleUtil->is_admin(auth()->user(), auth()->user()->business_id);
                             $html .= '<li class="divider"></li>';
 
-                            if ($row->payment_status != 'paid' || $row->payment_status != 'setoff' && (auth()->user()->can('sell.create') || auth()->user()->can('direct_sell.access')) && auth()->user()->can('sell.payments')) {
-                                if (!(!auth()->user()->can('sell.minimu_price_override') && $row->is_suspend) || $row->approved || $is_admin) {
+                            if ($row->payment_status != 'paid' || $row->payment_status != 'setoff' && ($permission_sell_create || $permission_direct_sell) && $permission_sell_payment) {
+                                if (!(!$minimum_price_override && $row->is_suspend) || $row->approved || $is_admin) {
                                     $html .= '<li><a href="' . remote_url('payments/add_payment/'.$row->id) . '" class="add_payment_modal"><i class="fas fa-money-bill-alt"></i> ' . __('purchase.add_payment') . '</a></li>';
                                 }
                             }
-                            if (!(!auth()->user()->can('sell.minimu_price_override') && $row->is_suspend) || $row->approved || $is_admin) {
+                            if (!(!$permission_sell_payment && $row->is_suspend) || $row->approved || $is_admin) {
                                 $html .= '<li><a href="' . remote_url('payments/'.$row->id) . '" class="view_payment_modal"><i class="fas fa-money-bill-alt"></i> ' . __('purchase.view_payments') . '</a></li>';
                             }
 
-                            if (auth()->user()->can('sell.create')) {
+                            if ($permission_sell_create) {
                                 $html .= '<li><a href="' . remote_url('sells/duplicate/'.$row->id) . '"><i class="fas fa-copy"></i> ' . __('lang_v1.duplicate_sell') . '</a></li>';
                             }
-                            if (auth()->user()->can('access_sell_return')) {
+                            if ($permission_sell_return) {
                                 $html .= '<li><a href="' . remote_url('sell-return/add/'.$row->id) . '"><i class="fas fa-undo"></i> ' . __('lang_v1.sell_return') . '</a></li>';
                             }
-                            if (auth()->user()->can('sell.create') && $row->payment_status != 'due') {
+                            if ($permission_sell_create && $row->payment_status != 'due') {
                                 $html .= '
                                 <li><a href="' . remote_url('sell-return/add/'.$row->id.'?status=exchange') . '"><i class="fas fa-exchange-alt"></i> ' . __('lang_v1.exchange') . '</a></li>';
                             }
-                            if (auth()->user()->can('sell.create')) {
+                            if ($permission_sell_create) {
                                 $html .= '
                                 <li><a href="' . remote_url('sells/invoice-url/'.$row->id) . '" class="view_invoice_url"><i class="fas fa-eye"></i> ' . __('lang_v1.view_invoice_url') . '</a></li>';
                             }
@@ -474,23 +497,21 @@ class ReportController extends Controller
                 }
             )
             ->editColumn('transaction_date',
-                function ($row) {
+                function ($row) use($date_format,$time_format) {
                     $carbonDate = Carbon::createFromFormat('Y-m-d H:i:s', $row->transaction_date);
-                    $date_format = auth()->user()->business->date_format;
-                    $time_format = (auth()->user()->business->time_format = '24') ? 'H:i' : 'h:i A';
                     $datetime_format = $date_format . ' ' . $time_format;
 
                     return $carbonDate->format($datetime_format);
                 })
             ->editColumn(
                 'payment_status',
-                function ($row) {
-                    $is_admin = auth()->user()->can('Admin');
+                function ($row) use ($is_admin,$minimum_price_override) {
+
                     $payment_status = Transaction::getPaymentStatus($row);
 
                     return (string)view('supports.payment_status', [
                         'payment_status' => $payment_status, 'id' => $row->id, 'is_suspend' => $row->is_suspend,
-                        'overide_permission' => auth()->user()->can('sell.minimu_price_override'),
+                        'overide_permission' => $minimum_price_override,
                         'approved' => $row->approved, 'is_admin' => $is_admin,
                     ]);
                 }
@@ -501,9 +522,7 @@ class ReportController extends Controller
             )
             ->addColumn('total_remaining', function ($row) {
                 $total_remaining = $row->final_total - $row->total_paid;
-                $total_remaining_html = '<span class="display_currency payment_due" data-currency_symbol="true" data-orig-value="' . $total_remaining . '">' . $total_remaining . '</span>';
-
-                return $total_remaining_html;
+                return '<span class="display_currency payment_due" data-currency_symbol="true" data-orig-value="' . $total_remaining . '">' . $total_remaining . '</span>';
             })
             ->addColumn('return_due', function ($row) {
                 $return_due_html = '';
@@ -598,9 +617,7 @@ class ReportController extends Controller
                     $payment_method = __('lang_v1.checkout_multi_pay');
                 }
 
-                $html = !empty($payment_method) ? '<span class="payment-method" data-orig-value="' . $payment_method . '" data-status-name="' . $payment_method . '">' . $payment_method . '</span>' : '';
-
-                return $html;
+                return !empty($payment_method) ? '<span class="payment-method" data-orig-value="' . $payment_method . '" data-status-name="' . $payment_method . '">' . $payment_method . '</span>' : '';
             })
             ->editColumn(
                 'sale_type',
@@ -624,6 +641,20 @@ class ReportController extends Controller
                 return $multi_sale_type;
 
             })
+            ->editColumn('created_at',
+                function ($row) use($date_format,$time_format) {
+                    $carbonDate = Carbon::createFromFormat('Y-m-d H:i:s', $row->created_at);
+                    $datetime_format = $date_format . ' ' . $time_format;
+
+                    return $carbonDate->format($datetime_format);
+                })
+            ->editColumn('updated_at',
+                function ($row) use($date_format,$time_format) {
+                    $carbonDate = Carbon::createFromFormat('Y-m-d H:i:s', $row->updated_at);
+                    $datetime_format = $date_format . ' ' . $time_format;
+
+                    return $carbonDate->format($datetime_format);
+                })
             ->setRowAttr([
                 'data-href' => function ($row) {
                     return remote_url('sells/'.$row->id);
@@ -634,6 +665,7 @@ class ReportController extends Controller
             'final_total', 'Business_name', 'address', 'action', 'total_paid', 'total_remaining', 'payment_status',
             'invoice_no', 'discount_amount', 'tax_amount', 'total_before_tax', 'shipping_status',
             'types_of_service_name', 'payment_methods', 'return_due', 'sale_type', 'multi_sale_type', 'com_agent',
+            'updated_at','created_at'
         ];
 
         return $datatable->rawColumns($rawColumns)
@@ -957,6 +989,11 @@ class ReportController extends Controller
                 $products->where('products.repair_model_id', request()->get('repair_model_id'));
             }
 
+            $permissions_product_update = auth()->user()->can('product.update');
+            $permissions_product_delete = auth()->user()->can('product.delete');
+            $permissions_opening_stock = auth()->user()->can('product.opening_stock');
+            $permissions_product_create = auth()->user()->can('product.create');
+
             return Datatables::of($products)
                 ->addColumn(
                     'product_locations',
@@ -967,23 +1004,26 @@ class ReportController extends Controller
                 ->editColumn('category', '{{$category}} @if(!empty($sub_category))<br/> -- {{$sub_category}}@endif')
                 ->addColumn(
                     'action',
-                    function ($row) use ($selling_price_group_count) {
+                    function ($row) use ($selling_price_group_count,
+                        $permissions_product_update,
+                        $permissions_product_delete,
+                        $permissions_opening_stock,
+                        $permissions_product_create
+                    ) {
                         $html =
                             '<div class="btn-group"><button type="button" class="btn btn-info dropdown-toggle btn-xs" data-toggle="dropdown" aria-expanded="false">' . __("messages.actions") . '<span class="caret"></span><span class="sr-only">Toggle Dropdown</span></button><ul class="dropdown-menu dropdown-menu-left" role="menu"><li><a href="' . remote_action('LabelsController@show') . '?product_id=' . $row->id . '" data-toggle="tooltip" title="' . __('lang_v1.label_help') . '"><i class="fa fa-barcode"></i> ' . __('barcode.labels') . '</a></li>';
 
-                        if (auth()->user()->can('product.view')) {
                             $html .=
                                 '<li><a href="' . remote_action('ProductController@view',
                                     [$row->id]) . '" class="view-product"><i class="fa fa-eye"></i> ' . __("messages.view") . '</a></li>';
-                        }
 
-                        if (auth()->user()->can('product.update')) {
+                        if ($permissions_product_update) {
                             $html .=
                                 '<li><a href="' . remote_action('ProductController@edit',
                                     [$row->id]) . '"><i class="glyphicon glyphicon-edit"></i> ' . __("messages.edit") . '</a></li>';
                         }
 
-                        if (auth()->user()->can('product.delete')) {
+                        if ($permissions_product_delete) {
                             $html .=
                                 '<li><a href="' . $this->remote_action('ProductController@destroy',
                                     [$row->id]) . '" class="delete-product"><i class="fa fa-trash"></i> ' . __("messages.delete") . '</a></li>';
@@ -997,19 +1037,18 @@ class ReportController extends Controller
 
                         $html .= '<li class="divider"></li>';
 
-                        if ($row->enable_stock == 1 && auth()->user()->can('product.opening_stock')) {
+                        if ($row->enable_stock == 1 && $permissions_opening_stock) {
                             $html .=
                                 '<li><a href="#" data-href="' . remote_action('OpeningStockController@add',
                                     ['product_id' => $row->id]) . '" class="add-opening-stock"><i class="fa fa-database"></i> ' . __("lang_v1.add_edit_opening_stock") . '</a></li>';
                         }
 
-                        if (auth()->user()->can('product.view')) {
                             $html .=
                                 '<li><a href="' . remote_action('ProductController@productStockHistory',
                                     [$row->id]) . '"><i class="fas fa-history"></i> ' . __("lang_v1.product_stock_history") . '</a></li>';
-                        }
 
-                        if (auth()->user()->can('product.create')) {
+
+                        if ($permissions_product_create) {
 
                             if ($selling_price_group_count > 0) {
                                 $html .=
@@ -1080,11 +1119,7 @@ class ReportController extends Controller
                 })
                 ->setRowAttr([
                     'data-href' => function ($row) {
-                        if (auth()->user()->can("product.view")) {
-                            return remote_action('ProductController@view', [$row->id]);
-                        } else {
-                            return '';
-                        }
+                        return remote_action('ProductController@view', [$row->id]);
                     }
                 ])
                 ->rawColumns([

@@ -3,7 +3,6 @@
 namespace App\Utils;
 
 use App\Contact;
-use App\Transaction;
 use DB;
 
 class ContactUtil extends Util
@@ -78,105 +77,6 @@ class ContactUtil extends Util
             )->first();
 
         return $contact;
-    }
-
-    public function createNewContact($input)
-    {
-        //Check Contact id
-        $count = 0;
-        if (! empty($input['contact_id'])) {
-            $count = Contact::where('business_id', $input['business_id'])
-                ->where('contact_id', $input['contact_id'])
-                ->count();
-        }
-        if ($count == 0) {
-            //Update reference count
-            $ref_count = $this->setAndGetReferenceCount('contacts', $input['business_id']);
-
-            if (empty($input['contact_id'])) {
-                //Generate reference number
-                $input['contact_id'] = $this->generateReferenceNumber('contacts', $ref_count, $input['business_id']);
-            }
-
-            $opening_balance = isset($input['opening_balance']) ? $input['opening_balance'] : 0;
-            if (isset($input['opening_balance'])) {
-                unset($input['opening_balance']);
-            }
-
-            $contact = Contact::create($input);
-
-            //Add opening balance
-            if ($opening_balance >= 0) {
-                $transactionUtil = new TransactionUtil();
-                $transactionUtil->createOpeningBalanceTransaction($contact->business_id, $contact->id, $opening_balance, $contact->created_by, false);
-            }
-
-            $output = ['success' => true,
-                'data' => $contact,
-                'msg' => __('contact.added_success'),
-            ];
-
-            return $output;
-        } else {
-            throw new \Exception('Error Processing Request', 1);
-        }
-    }
-
-    public function updateContact($input, $id, $business_id)
-    {
-        $count = 0;
-        //Check Contact id
-        if (! empty($input['contact_id'])) {
-            $count = Contact::where('business_id', $business_id)
-                ->where('contact_id', $input['contact_id'])
-                ->where('id', '!=', $id)
-                ->count();
-        }
-
-        if ($count == 0) {
-            //Get opening balance if exists
-            $ob_transaction = Transaction::where('contact_id', $id)
-                ->where('type', 'opening_balance')
-                ->first();
-            $opening_balance = isset($input['opening_balance']) ? $input['opening_balance'] : 0;
-
-            if (isset($input['opening_balance'])) {
-                unset($input['opening_balance']);
-            }
-
-            $contact = Contact::where('business_id', $business_id)->findOrFail($id);
-            foreach ($input as $key => $value) {
-                $contact->$key = $value;
-            }
-            $contact->save();
-
-            $transactionUtil = new TransactionUtil();
-            if (! empty($ob_transaction)) {
-                $opening_balance_paid = $transactionUtil->getTotalAmountPaid($ob_transaction->id);
-                if (! empty($opening_balance_paid)) {
-                    $opening_balance += $opening_balance_paid;
-                }
-
-                $ob_transaction->final_total = $opening_balance;
-                $ob_transaction->save();
-                //Update opening balance payment status
-                $transactionUtil->updatePaymentStatus($ob_transaction->id, $ob_transaction->final_total);
-            } else {
-                //Add opening balance
-                if (! empty($opening_balance)) {
-                    $transactionUtil->createOpeningBalanceTransaction($business_id, $contact->id, $opening_balance, $contact->created_by, false);
-                }
-            }
-
-            $output = ['success' => true,
-                'msg' => __('contact.updated_success'),
-                'data' => $contact,
-            ];
-        } else {
-            throw new \Exception('Error Processing Request', 1);
-        }
-
-        return $output;
     }
 
     public function getContactQuery($business_id, $type, $contact_ids = [])
